@@ -8,32 +8,19 @@ You will need to have GAP installed with the Semigroups, Images and Ferret packa
   Images    : https://github.com/gap-packages/images
   Ferret    : https://github.com/gap-packages/ferret
 
-Extract the precalculated data files:
+The functions AllZeroSimpleSemigroups, AllSimpleSemigroups,
+IteratorOfZeroSimpleSemigroups and IteratorOfSimpleSemigroups can be used with
+either two arguments (order, anti_iso) or four (nr_rows, nr_cols, G, anti-iso).
+These functions list the RZMS / RMS with these parameters up to isomorphism or
+anti-isomorphism.
 
-  tar -xvzf shapes.tar.gz 
+order (integer) - order of semigroup
+anti_iso (boolean) - enumerate up to anti-isomorphism?
+nr_rows, nr_cols (integer) - how many rows / columns of the matrix defining the
+                             RZMS / RMS
+G - the group over which the RZMS / RMS is defined
 
-Edit line 197 of the file EnumRZMSShapes.g:
-
-  prefix := "/Users/crussell/Desktop/shapes/shapes-";
-
-so that it points to the directory of the shapes folder which is part of this
-pacakge. E.g.
-
-  prefix := "/path/to/shapes/folder/shape/shapes-";
-
-Then open GAP and load the required packages. Then use the `Read` function to read
-the file 'EnumRZMSShapes.g' followed by the file 'EnumRZMS.g'.
-
-The function RZMSMain(k, [G, m, n, anti]) can be used with up to 5 arguments to
-enumerate the 0-simple RZMS of order k. The optional arguments can be either 0 or
-
-G - a group which the RZMS must be over
-m - the number of rows which the matrix of the RZMS should have
-n - the number of columns which the matrix of the RZMS should have
-anti (default = true) - true indicates that RZMS should be enmumerated up to
-anti-isomorphism. False indicates they should be enumerated up to isomorphism.
-
-setting any of these to 0 or ommitting them implies that you don't want to
-filtered the RZMS of order k by that parameter. If specifying m then you must
-specify G (possibly as 0). If specifying n you must specify G and m. If
-specifying anti you must specify all arguments.
+The functions NrZeroSimpleSemigroups and NrSimpleSemigroups can be called with
+one argument which is either (order) or (list) where list is a list of length 3
+[nr_rows, nr_cols, G]. These functions count how many (0-)simple semigroups
+there are with these parameters up to isomorphism.
