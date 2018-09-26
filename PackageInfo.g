@@ -1,5 +1,6 @@
 #
-# 0_simple_semigroups: This package contains a database of 0-simple semigroups of low order.
+# othersmallsemi: This package contains various databases of semigroups
+# of low order.
 #
 # This file contains package meta data. For additional information on
 # the meaning and correct usage of these fields, please consult the
@@ -8,8 +9,8 @@
 #
 SetPackageInfo( rec(
 
-PackageName := "0_simple_semigroups",
-Subtitle := "This package contains a database of 0-simple semigroups of low order.",
+PackageName := "othersmallsemi",
+Subtitle := "This package contains various databases semigroups of low order.",
 Version := "0.1",
 Date := "29/08/2018", # dd/mm/yyyy format
 
@@ -55,17 +56,22 @@ Status := "dev",
 AbstractHTML   :=  "",
 
 PackageDoc := rec(
-  BookName  := "0_simple_semigroups",
+  BookName  := "othersmallsemi",
   ArchiveURLSubset := ["doc"],
   HTMLStart := "doc/chap0.html",
   PDFFile   := "doc/manual.pdf",
   SixFile   := "doc/manual.six",
-  LongTitle := "This package contains a database of 0-simple semigroups of low order.",
+  LongTitle := "This package contains various databases semigroups of low order.",
 ),
 
 Dependencies := rec(
   GAP := ">= 4.9",
-  NeededOtherPackages := [ [ "GAPDoc", ">= 1.6.1" ] ],
+  NeededOtherPackages := [ [ "GAPDoc", ">= 1.6.1" ],
+                           [ "semigroups", ">=2.9.0"],
+                           [ "ferret", ">=1.0.0" ],
+                           [ "images", ">=1.1.0" ],
+                           [ "io", ">=4.5.1" ],
+                           [ "genss", ">=1.6.5"] ],
   SuggestedOtherPackages := [ ],
   ExternalConditions := [ ],
 ),

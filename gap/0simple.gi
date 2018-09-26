@@ -188,11 +188,14 @@ end;
 ###############################################################################
 # IO methods used whilst seraching as well as to save results.
 ###############################################################################
-OSS.BinaryMatrixShapesReadFile := function(nr_rows, nr_cols)
+OSS.BinaryMatrixShapesReadFile := function(nr_rows, nr_cols, anti_iso)
   local dir, name, file, out;
-  dir    := PackageInfo("0_simple_semigroups")[1].InstallationPath;
+  dir    := PackageInfo("othersmallsemi")[1].InstallationPath;
   name   := Concatenation(dir, "/data/", String(nr_rows),
                           "x", String(nr_cols));
+  if anti_iso and nr_rows = nr_cols then
+    Append(name, "anti");
+  fi;
   file   := IO_File(name, "r");
   if file = fail then
     return fail;
@@ -203,11 +206,14 @@ OSS.BinaryMatrixShapesReadFile := function(nr_rows, nr_cols)
   return out;
 end;
 
-OSS.BinaryMatrixShapesWriteFile := function(nr_rows, nr_cols, data)
+OSS.BinaryMatrixShapesWriteFile := function(nr_rows, nr_cols, anti_iso, data)
   local dir, name, file;
-  dir    := PackageInfo("0_simple_semigroups")[1].InstallationPath;
+  dir    := PackageInfo("othersmallsemi")[1].InstallationPath;
   name   := Concatenation(dir, "/data/", String(nr_rows),
                           "x", String(nr_cols));
+  if anti_iso and nr_rows = nr_cols then
+    Append(name, "anti");
+  fi;
   file   := IO_File(name, "w");
   IO_WriteLines(file, data);
   IO_Close(file);
@@ -222,7 +228,7 @@ OSS.BinaryMatrixShapesByDim := function(nr_rows, nr_cols, anti_iso, RW)
 
   # If we have calculated this case before then return those results
   if RW then
-    data := OSS.BinaryMatrixShapesReadFile(nr_rows, nr_cols);
+    data := OSS.BinaryMatrixShapesReadFile(nr_rows, nr_cols, anti_iso);
     if data <> fail then
       return data;
     fi;
@@ -277,7 +283,7 @@ OSS.BinaryMatrixShapesByDim := function(nr_rows, nr_cols, anti_iso, RW)
   fi;
 
   if RW then
-    OSS.BinaryMatrixShapesWriteFile(nr_rows, nr_cols, out);
+    OSS.BinaryMatrixShapesWriteFile(nr_rows, nr_cols, anti_iso, out);
   fi;
   return out;
 end;
@@ -287,7 +293,7 @@ OSS.IteratorBinaryMatrixShapesByDim := function(nr_rows, nr_cols, anti_iso, RW)
 
   # If we have calculated this case before then return those results
   if RW then
-    data := OSS.BinaryMatrixShapesReadFile(nr_rows, nr_cols);
+    data := OSS.BinaryMatrixShapesReadFile(nr_rows, nr_cols, anti_iso);
     if data <> fail then
       return Iterator(data);
     fi;
@@ -305,13 +311,13 @@ OSS.IteratorBinaryMatrixShapesByDim := function(nr_rows, nr_cols, anti_iso, RW)
                                                     anti_iso, RW);
     R!.trans := OSS.TranspositionPermutation(nr_rows, nr_cols);
 
-    R.NextIterator := function(iter)
+    R!.NextIterator := function(iter)
       return OnSets(NextIterator(R!.iter), R!.trans);
     end;
 
-    R.IsDoneIterator := R!.iter!.IsDoneIterator;
+    R!.IsDoneIterator := R!.iter!.IsDoneIterator;
 
-    R.ShallowCopy := function(iter)
+    R!.ShallowCopy := function(iter)
 
       return rec(iter := iter!.iter, trans := iter!.trans);
     end;
@@ -336,7 +342,7 @@ OSS.IteratorBinaryMatrixShapesByDim := function(nr_rows, nr_cols, anti_iso, RW)
     UniteSet(R!.current, R!.e);
     R!.current := CanonicalImage(R!.G, R!.current, OnSets);
 
-    R.NextIterator := function(iter)
+    R!.NextIterator := function(iter)
       local next;
       AddSet(R!.found, R!.current);
       next       := R!.current;
@@ -372,11 +378,11 @@ OSS.IteratorBinaryMatrixShapesByDim := function(nr_rows, nr_cols, anti_iso, RW)
       return next;
     end;
 
-    R.IsDoneIterator := function(iter)
+    R!.IsDoneIterator := function(iter)
       return R!.done;
     end;
 
-    R.ShallowCopy := function(iter)
+    R!.ShallowCopy := function(iter)
 
       return rec(embed      := iter!.embed,
                  G          := iter!.G,
@@ -409,7 +415,7 @@ OSS.IteratorBinaryMatrixShapesByDim := function(nr_rows, nr_cols, anti_iso, RW)
     # Start with this one-off
     R!.current := [1 .. nr_rows * nr_cols];
 
-    R.NextIterator := function(iter)
+    R!.NextIterator := function(iter)
       local next;
       AddSet(R!.found, R!.current);
       next       := R!.current;
@@ -445,11 +451,11 @@ OSS.IteratorBinaryMatrixShapesByDim := function(nr_rows, nr_cols, anti_iso, RW)
       return next;
     end;
 
-    R.IsDoneIterator := function(iter)
+    R!.IsDoneIterator := function(iter)
       return R!.done;
     end;
 
-    R.ShallowCopy := function(iter)
+    R!.ShallowCopy := function(iter)
 
       return rec(embed      := iter!.embed,
                  G          := iter!.G,
@@ -702,56 +708,12 @@ OSS.RZMSMatrixIsomorphismGroup := function(shape, nr_rows, nr_cols,
               i -> ForAll([i + 1 .. nr_cols],
                           j -> (((i - 1) * nr_cols + j) in shape) =
                                (((j - 1) * nr_cols + i) in shape))) then
-      Append(auto, OSS.TranspositionPerm(dim));
+      Add(auto, OSS.TranspositionPerm(dim));
     fi;
   fi;
 
   # The RZMS matrix isomorphism group
   return Group(Flat([GeneratorsOfGroup(H), grswaps, gcswaps, auto]));
-end;
-
-OSS.RMSMatrixIsomorphismGroup := function(nr_rows, nr_cols, G, anti_iso)
-  local dim, S, rows, cols, gens, elms, rmlt, grswaps, lmlt, gcswaps, auto;
-
-  dim := [nr_rows, nr_cols, Size(G)];
-  # Row Swaps
-  S    := SymmetricGroup(nr_rows);
-  rows := List(GeneratorsOfGroup(S),
-               x -> OSS.ApplyPermWholeDimension(dim, 1, x));
-
-  # Col swaps
-  S    := SymmetricGroup(nr_cols);
-  cols := List(GeneratorsOfGroup(S),
-               x -> OSS.ApplyPermWholeDimension(dim, 2, x));
-
-  gens := GeneratorsOfGroup(G);
-  elms := ShallowCopy(Elements(G));
-
-  # Apply g to each row (right multiplication):
-  rmlt    := List(gens, g -> PermList(List(elms, e -> Position(elms, e * g))));
-  grswaps := List([1 .. dim[1]], r -> List(rmlt, g ->
-                  OSS.ApplyPermSingleAssignDimension(dim, 3, g, 1, r)));
-
-  # Apply g to each col (left multiplication by inverse):
-  lmlt := List(gens,
-               g -> PermList(List(elms, e -> Position(elms, g ^ -1 * e))));
-  gcswaps := List([1 .. dim[2]], r -> List(lmlt, g ->
-  OSS.ApplyPermSingleAssignDimension(dim, 3, g, 2, r)));
-
-  # Automorphisms of G
-  S    := AutomorphismGroup(G);
-  auto := List(GeneratorsOfGroup(S), x -> List(Elements(G), a ->
-          Position(Elements(G), a ^ x)));
-  Apply(auto, PermList);
-  auto := List(auto, x -> OSS.ApplyPermWholeDimension(dim, 3, x));
-
-  # Add transposition perm if searching up to anti-isomorphism in square case
-  if anti_iso and nr_rows = nr_cols then
-    Append(auto, OSS.TranspositionPerm(dim));
-  fi;
-
-  # The RZMS matrix isomorphism group
-  return Group(Flat([rows, cols, grswaps, gcswaps, auto]));
 end;
 
 ###############################################################################
@@ -878,7 +840,7 @@ OSS.IteratorRZMSMatricesByShape := function(nr_rows, nr_cols, G,
 
   # TODO: this still returns something (the last value) even once IsDoneIterator
   # is true. Is this bad?
-  R.NextIterator := function(iter)
+  R!.NextIterator := function(iter)
     local next;
     next := R!.current;
     AddSet(R!.found, next);
@@ -888,11 +850,11 @@ OSS.IteratorRZMSMatricesByShape := function(nr_rows, nr_cols, G,
     return next;
   end;
 
-  R.IsDoneIterator := function(iter)
+  R!.IsDoneIterator := function(iter)
     return IsDoneIterator(R!.cart) and R!.current in R!.found;
   end;
 
-  R.ShallowCopy   := function(iter)
+  R!.ShallowCopy   := function(iter)
 
     return rec(IG      := iter!.IG,
                cart    := iter!.cart,
@@ -1031,7 +993,7 @@ OSS.IteratorRZMSMatricesByParameters := function(nr_rows, nr_cols, G, anti_iso)
   fi;
   R!.mat_iter := func(nr_rows, nr_cols, G, shape, anti_iso);
 
-  R.NextIterator := function(iter)
+  R!.NextIterator := function(iter)
     if IsDoneIterator(R!.mat_iter) then
       R!.mat_iter := func(nr_rows, nr_cols, G, NextIterator(R!.shapes_iter),
                           anti_iso);
@@ -1039,59 +1001,16 @@ OSS.IteratorRZMSMatricesByParameters := function(nr_rows, nr_cols, G, anti_iso)
     return NextIterator(R!.mat_iter);
   end;
 
-  R.IsDoneIterator := function(iter)
+  R!.IsDoneIterator := function(iter)
     return IsDoneIterator(R!.shapes_iter) and IsDoneIterator(R!.mat_iter);
   end;
 
-  R.ShallowCopy := function(iter)
+  R!.ShallowCopy := function(iter)
 
     return rec(shapes_iter := iter!.shapes_iter, mat_iter := iter!.mat_iter);
   end;
 
   return IteratorByFunctions(R);
-end;
-
-OSS.RMSMatricesByParameters := function(nr_rows, nr_cols, G, anti_iso)
-  local pos, out, i, IG, dim, space, pos_one, iter, mat, j;
-
-  if nr_cols = 1 then
-    pos := Position(Elements(G), One(G));
-    return [List([1 .. nr_rows], i -> pos + (i - 1) * Size(G))];
-  fi;
-
-  # The m x n case is deduced from the n x m case.
-  if nr_rows < nr_cols then
-    out := OSS.RMSMatricesByParameters(nr_cols, nr_rows, G, anti_iso);
-    Apply(out, a -> OSS.Unflatten3DPoint([nr_rows, nr_cols, Size(G)], a));
-    for i in out do
-      i := [i[2], i[1], i[3]];
-    od;
-    Apply(out, a -> OSS.Flatten3DPoint([nr_rows, nr_cols, Size(G)], a));
-    return out;
-  fi;
-
-  IG          := OSS.RMSMatrixIsomorphismGroup(nr_rows, nr_cols, G, anti_iso);
-  dim         := [nr_rows, nr_cols, Size(G)];
-  space       := [];
-  pos_one     := Position(G, One(G));
-  for i in [1 .. dim[1]] do
-    for j in [1 .. dim[2]] do
-      if i = 1 or j = 1 then
-        Add(space, [OSS.Flatten3DPoint(dim, [i, j, pos_one])]);
-      else
-        Add(space, List([1 .. Size(G)],
-                        g -> OSS.Flatten3DPoint(dim, [i, j, g])));
-      fi;
-    od;
-  od;
-
-  out  := Set([]);
-  iter := IteratorOfCartesianProduct(space);
-  while not IsDoneIterator(iter) do
-    mat := NextIterator(iter);
-    AddSet(out, CanonicalImage(IG, mat, OnSets));
-  od;
-  return out;
 end;
 
 ###############################################################################
@@ -1127,7 +1046,7 @@ OSS.IteratorRZMSMatrices := function(nr_rows, nr_cols, group, anti_iso)
                                                anti_iso);
   f := R!.NextIterator;
 
-  R.NextIterator := function(iter)
+  R!.NextIterator := function(iter)
     return OSS.SetToZeroGroupMatrix(f(R), nr_rows, nr_cols, group);
   end;
   return R;
@@ -1138,7 +1057,7 @@ OSS.IteratorRZMS := function(nr_rows, nr_cols, group, anti_iso)
   R := OSS.IteratorRZMSMatrices(nr_rows, nr_cols, group, anti_iso);
   f := R!.NextIterator;
 
-  R.NextIterator := function(iter)
+  R!.NextIterator := function(iter)
     return ReesZeroMatrixSemigroup(group, f(R));
   end;
   return R;
@@ -1149,13 +1068,13 @@ OSS.IteratorRZMSByOrder := function(order, anti_iso)
   parameters := OSS.RZMSParametersByOrder(order, anti_iso);
   parameters := List(parameters, p -> List(AllSmallGroups(p[3]), G -> [p[1],
                 p[2], Image(IsomorphismPermGroup(G))]));
-  parameters := Iterator(parameters);
+  parameters := Iterator(Concatenation(parameters));
 
   R           := rec(paramIter := parameters);
   R!.p        := NextIterator(R!.paramIter);
   R!.RZMSiter := OSS.IteratorRZMS(R!.p[1], R!.p[2], R!.p[3], anti_iso);
 
-  R.NextIterator := function(iter)
+  R!.NextIterator := function(iter)
     if IsDoneIterator(R!.RZMSiter) then
       R!.p        := NextIterator(R!.paramIter);
       R!.RZMSiter := OSS.IteratorRZMS(R!.p[1], R!.p[2], R!.p[3], anti_iso);
@@ -1163,11 +1082,11 @@ OSS.IteratorRZMSByOrder := function(order, anti_iso)
     return NextIterator(R!.RZMSiter);
   end;
 
-  R.IsDoneIterator := function(iter)
+  R!.IsDoneIterator := function(iter)
     return IsDoneIterator(R!.paramIter) and IsDoneIterator(R!.RZMSiter);
   end;
 
-  R.ShallowCopy := function(iter)
+  R!.ShallowCopy := function(iter)
 
     return rec(paramIter := iter!.paramIter,
                RZMSiter  := R!.RZMSiter,
@@ -1180,68 +1099,52 @@ end;
 ###############################################################################
 # User Methods
 ###############################################################################
-AllZeroSimpleSemigroups := function(nr_rows, nr_cols, group, anti_iso)
-  if not IsInt(nr_rows) and 0 < nr_rows then
+InstallMethod(AllZeroSimpleSemigroups,
+"for an int, an int, a group and a bool",
+[IsInt, IsInt, IsGroup, IsBool],
+function(nr_rows, nr_cols, group, anti_iso)
+  if 1 > nr_rows then
     ErrorNoReturn("OSS: AllZeroSimpleSemigroups: usage,\n ",
                   "the first argument should be a strictly positive integer,");
-  elif not IsInt(nr_cols) and 0 < nr_cols then
+  elif 1 > nr_cols then
     ErrorNoReturn("OSS: AllZeroSimpleSemigroups: usage,\n ",
                   "the second argument should be a strictly positive integer,");
-  elif not IsGroup(group) then
-    ErrorNoReturn("OSS: AllZeroSimpleSemigroups: usage,\n ",
-                  "the third argument should be a group,");
-  elif not IsBool(anti_iso) then
-    ErrorNoReturn("OSS: AllZeroSimpleSemigroups: usage,\n ",
-                  "the fourth argument should be either true or false,");
   fi;
   return OSS.RZMS(nr_rows, nr_cols, group, anti_iso);
-end;
+end);
 
-AllZeroSimpleSemigroups := function(order, anti_iso)
-  if not IsInt(order) and 0 < order then
+InstallMethod(AllZeroSimpleSemigroups,
+"for an int and a bool",
+[IsInt, IsBool],
+function(order, anti_iso)
+  if 1 > order then
     ErrorNoReturn("OSS: AllZeroSimpleSemigroups: usage,\n ",
                   "the first argument should be a strictly positive integer,");
   fi;
   return OSS.RZMSByOrder(order, anti_iso);
-end;
+end);
 
-IteratorOfZeroSimpleSemigroups := function(nr_rows, nr_cols, group, anti_iso)
-  if not IsInt(nr_rows) and 0 < nr_rows then
+InstallMethod(IteratorOfZeroSimpleSemigroups,
+"for an int, an int, a group and a bool",
+[IsInt, IsInt, IsGroup, IsBool],
+function(nr_rows, nr_cols, group, anti_iso)
+  if 1 > nr_rows then
     ErrorNoReturn("OSS: IteratorOfZeroSimpleSemigroups: usage,\n ",
                   "the first argument should be a strictly positive integer,");
-  elif not IsInt(nr_cols) and 0 < nr_cols then
+  elif 1 > nr_cols then
     ErrorNoReturn("OSS: IteratorOfZeroSimpleSemigroups: usage,\n ",
                   "the second argument should be a strictly positive integer,");
-  elif not IsGroup(group) then
-    ErrorNoReturn("OSS: IteratorOfZeroSimpleSemigroups: usage,\n ",
-                  "the third argument should be a group,");
-  elif not IsBool(anti_iso) then
-    ErrorNoReturn("OSS: IteratorOfZeroSimpleSemigroups: usage,\n ",
-                  "the fourth argument should be either true or false,");
   fi;
   return OSS.IteratorRZMS(nr_rows, nr_cols, group, anti_iso);
-end;
+end);
 
-IteratorOfZeroSimpleSemigroups := function(order, anti_iso)
-  if not IsInt(order) and 0 < order then
+InstallMethod(IteratorOfZeroSimpleSemigroups,
+"for an int and a bool",
+[IsInt, IsBool],
+function(order, anti_iso)
+  if 1 > order then
     ErrorNoReturn("OSS: IteratorOfZeroSimpleSemigroups: usage,\n ",
                   "the first argument should be a strictly positive integer,");
   fi;
   return OSS.IteratorRZMSByOrder(order, anti_iso);
-end;
-
-AllCongruenceFreeSemigroups := function(nr_rows, nr_cols, group, anti_iso)
-
-end;
-
-AllCongruenceFreeSemigroups := function(order)
-
-end;
-
-IteratorOfCongruenceFreeSemigroups := function(nr_rows, nr_cols, group, anti_iso)
-
-end;
-
-IteratorOfCongruenceFreeSemigroups := function(order)
-
-end;
+end);

@@ -1,6 +1,6 @@
 ###############################################################################
 ###############################################################################
-## Enumerating matrices over 0-groups up to row and column permutations
+## Enumerating matrices over groups up to row and column permutations
 ###############################################################################
 ###############################################################################
 # This code requires the images package and the ferret package.
@@ -75,13 +75,57 @@ end;
 # RMS of order k. If anti_iso = true then we search up to anti-isomorphism.
 ###############################################################################
 OSS.RMSParametersByOrder := function(k, anti_iso)
-  return OSS.RMSParametersByOrder(k + 1, anti_iso);
+  return OSS.RZMSParametersByOrder(k + 1, anti_iso);
 end;
 
 ###############################################################################
-# Methods for enumerating matrices over groups
+# Methods for enumerating matrices over groups (represented as sets)
 ###############################################################################
 OSS.RMSMatricesByParameters := function(nr_rows, nr_cols, G, anti_iso)
+  local pos, out, i, IG, dim, space, pos_one, iter, mat, j;
+
+  if nr_cols = 1 then
+    pos := Position(Elements(G), One(G));
+    return [List([1 .. nr_rows], i -> pos + (i - 1) * Size(G))];
+  fi;
+
+  # The m x n case is deduced from the n x m case.
+  if nr_rows < nr_cols then
+    out := OSS.RMSMatricesByParameters(nr_cols, nr_rows, G, anti_iso);
+    Apply(out, a -> OSS.Unflatten3DPoint([nr_rows, nr_cols, Size(G)], a));
+    for i in out do
+      i := [i[2], i[1], i[3]];
+    od;
+    Apply(out, a -> OSS.Flatten3DPoint([nr_rows, nr_cols, Size(G)], a));
+    return out;
+  fi;
+
+  IG    := OSS.RMSMatrixIsomorphismGroup(nr_rows, nr_cols, G, anti_iso);
+  dim   := [nr_rows, nr_cols, Size(G)];
+  space := [];
+  for i in [1 .. dim[1]] do
+    for j in [1 .. dim[2]] do
+      if i = 1 or j = 1 then
+        pos_one := Position(Elements(G), One(G));
+        Add(space, [OSS.Flatten3DPoint(dim, [i, j, pos_one])]);
+      else
+        Add(space, List([1 .. Size(G)],
+                        g -> OSS.Flatten3DPoint(dim, [i, j, g])));
+      fi;
+    od;
+  od;
+
+  out  := Set([]);
+  iter := IteratorOfCartesianProduct(space);
+  while not IsDoneIterator(iter) do
+    mat := NextIterator(iter);
+    AddSet(out, CanonicalImage(IG, mat, OnSets));
+  od;
+
+  return out;
+end;
+
+OSS.IteratorRMSMatricesByParameters := function(nr_rows, nr_cols, G, anti_iso)
   local pos, out, i, R, dim, space, pos_one, j;
 
   if nr_cols = 1 then
@@ -102,13 +146,13 @@ OSS.RMSMatricesByParameters := function(nr_rows, nr_cols, G, anti_iso)
 
   R := rec();
 
-  R!.IG       := OSS.RMSMatrixIsomorphismGroup(nr_rows, nr_cols, G, anti_iso);
-  dim         := [nr_rows, nr_cols, Size(G)];
-  space       := [];
-  pos_one     := Position(G, One(G));
+  R!.IG := OSS.RMSMatrixIsomorphismGroup(nr_rows, nr_cols, G, anti_iso);
+  dim   := [nr_rows, nr_cols, Size(G)];
+  space := [];
   for i in [1 .. dim[1]] do
     for j in [1 .. dim[2]] do
       if i = 1 or j = 1 then
+        pos_one := Position(Elements(G), One(G));
         Add(space, [OSS.Flatten3DPoint(dim, [i, j, pos_one])]);
       else
         Add(space, List([1 .. Size(G)],
@@ -151,27 +195,24 @@ OSS.RMSMatricesByParameters := function(nr_rows, nr_cols, G, anti_iso)
 end;
 
 ###############################################################################
-# Just for interest (have better method elsewhere) returns just the rees matrix
-# semigroups. They correspond to the RMS which have no zeros in the defining
-# matrix and are obtained by removing the zero element from these.
 OSS.RMSMatrices := function(nr_rows, nr_cols, group, anti_iso)
   return List(OSS.RMSMatricesByParameters(nr_rows, nr_cols, group, anti_iso),
-              mat -> OSS.SetToZeroGroupMatrix(mat, nr_rows, nr_cols, group));
+              mat -> OSS.SetToGroupMatrix(mat, nr_rows, nr_cols, group));
 end;
 
 OSS.RMS := function(nr_rows, nr_cols, group, anti_iso)
   return List(OSS.RMSMatrices(nr_rows, nr_cols, group, anti_iso),
-              mat -> ReesZeroMatrixSemigroup(group, mat));
+              mat -> ReesMatrixSemigroup(group, mat));
 end;
 
 OSS.RMSByOrder := function(order, anti_iso)
   local out, parameters, groups, p, group;
   out        := [];
-  parameters := OSS.RMSParameters(order, anti_iso);
+  parameters := OSS.RMSParametersByOrder(order, anti_iso);
   for p in parameters do
     groups := List(AllSmallGroups(p[3]), G -> Image(IsomorphismPermGroup(G)));
     for group in groups do
-      Append(out, OSS.RMS(p[1], p[2], group, anti_iso);
+      Append(out, OSS.RMS(p[1], p[2], group, anti_iso));
     od;
   od;
   return out;
@@ -180,18 +221,53 @@ end;
 ###############################################################################
 # User Methods
 ###############################################################################
-AllSimpleSemigroups := function(nr_rows, nr_cols, group, anti_iso)
+InstallMethod(AllSimpleSemigroups,
+"for an int, an int, a group and a bool",
+[IsInt, IsInt, IsGroup, IsBool],
+function(nr_rows, nr_cols, group, anti_iso)
+  if 1 > nr_rows then
+    ErrorNoReturn("OSS: AllSimpleSemigroups: usage,\n ",
+                  "the first argument should be a strictly positive integer,");
+  elif 1 > nr_cols then
+    ErrorNoReturn("OSS: AllSimpleSemigroups: usage,\n ",
+                  "the second argument should be a strictly positive integer,");
+  fi;
+  return OSS.RMS(nr_rows, nr_cols, group, anti_iso);
+end);
 
-end;
+InstallMethod(AllSimpleSemigroups,
+"for an int and a bool",
+[IsInt, IsBool],
+function(order, anti_iso)
+  if 1 > order then
+    ErrorNoReturn("OSS: AllSimpleSemigroups: usage,\n ",
+                  "the first argument should be a strictly positive integer,");
+  fi;
+  return OSS.IteratorRMSByOrder(order, anti_iso);
+end);
 
-AllSimpleSemigroups := function(order)
+InstallMethod(IteratorOfSimpleSemigroups,
+"for an int, an int, a group and a bool",
+[IsInt, IsInt, IsGroup, IsBool],
+function(nr_rows, nr_cols, group, anti_iso)
+  if 1 > nr_rows then
+    ErrorNoReturn("OSS: IteratorOfSimpleSemigroups: usage,\n ",
+                  "the first argument should be a strictly positive integer,");
+  elif 1 > nr_cols then
+    ErrorNoReturn("OSS: IteratorOfSimpleSemigroups: usage,\n ",
+                  "the second argument should be a strictly positive integer,");
+  fi;
+  return OSS.IteratorRMS(nr_rows, nr_cols, group, anti_iso);
+end);
 
-end;
+InstallMethod(IteratorOfSimpleSemigroups,
+"for an int and a bool",
+[IsInt, IsBool],
+function(order, anti_iso)
+  if 1 > order then
+    ErrorNoReturn("OSS: IteratorOfSimpleSemigroups: usage,\n ",
+                  "the first argument should be a strictly positive integer,");
+  fi;
+  return OSS.IteratorRMSByOrder(order, anti_iso);
+end);
 
-IteratorOfSimpleSemigroups := function(nr_rows, nr_cols, group, anti_iso)
-
-end;
-
-IteratorOfSimpleSemigroups := function(order)
-
-end;

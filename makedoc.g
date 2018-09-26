@@ -1,5 +1,6 @@
 #
-# 0_simple_semigroups: This package contains a database of 0-simple semigroups of low order.
+# othersmallsemi: This package contains various databases of semigroups
+# of low order.
 #
 # This file is a script which compiles the package manual.
 #
