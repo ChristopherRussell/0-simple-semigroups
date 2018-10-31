@@ -579,7 +579,7 @@ OSS.ZeroGroupMatrixToSet := function(mat, nr_rows, nr_cols, G)
         Add(set, OSS.Flatten3DPoint(dim, [i, j, 1]));
       else
         Add(set,
-          OSS.Flatten3DPoint(dim, [i, j, Position(Elements(G),
+          OSS.Flatten3DPoint(dim, [i, j, 1 + Position(Elements(G),
                                               mat[i][j])]));
       fi;
     od;
@@ -682,17 +682,17 @@ OSS.RZMSMatrixIsomorphismGroup := function(shape, nr_rows, nr_cols,
   gens := GeneratorsOfGroup(G);
   elms := ShallowCopy(Elements(G));
 
-  # Apply g to each row (right multiplication):
+  # Apply g to each row (left multiplication by inverse):
   rmlt := List(gens, g -> PermList(Concatenation([1],
-          1 + List(elms, e -> Position(elms, e * g)))));
-  grswaps := List([1 .. dim[1]], r -> List(rmlt, g ->
-  OSS.ApplyPermSingleAssignDimension(dim, 3, g, 1, r)));
+          1 + List(elms, e -> Position(elms, (g ^ -1) * e)))));
+  grswaps := List(rmlt,
+                  g -> OSS.ApplyPermSingleAssignDimension(dim, 3, g, 1, 1));
 
-  # Apply g to each col (left multiplication by inverse):
+  # Apply g to each col (right multiplication):
   lmlt := List(gens, g -> PermList(Concatenation([1],
-          1 + List(elms, e -> Position(elms, g ^ -1 * e)))));
-  gcswaps := List([1 .. dim[2]], r -> List(lmlt, g ->
-  OSS.ApplyPermSingleAssignDimension(dim, 3, g, 2, r)));
+          1 + List(elms, e -> Position(elms, e * g)))));
+  gcswaps := List(lmlt, g ->
+                  OSS.ApplyPermSingleAssignDimension(dim, 3, g, 2, r));
 
   # Automorphisms of G
   S    := AutomorphismGroup(G);
@@ -941,7 +941,7 @@ OSS.RZMSMatricesByParameters := function(nr_rows, nr_cols, G, anti_iso)
     return out;
   fi;
 
-  # Get shapes - if 3rd parameter is true then using precalculated binary mats.
+  # Get shapes - if 4th parameter is true then using precalculated binary mats.
   shapes := OSS.BinaryMatrixShapesByDim(nr_rows, nr_cols, anti_iso, true);
 
   # Find by shape
@@ -978,7 +978,7 @@ OSS.IteratorRZMSMatricesByParameters := function(nr_rows, nr_cols, G, anti_iso)
     return out;
   fi;
 
-  # Get shapes - if 3rd parameter is true then using precalculated binary mats.
+  # Get shapes - if 4th parameter is true then using precalculated binary mats.
   shapes := OSS.IteratorBinaryMatrixShapesByDim(nr_rows, nr_cols,
                                                 anti_iso, true);
 
