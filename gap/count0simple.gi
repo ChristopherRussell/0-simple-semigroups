@@ -1,10 +1,14 @@
+# TODO: check that multiplication actions are correct (row on left inverse and
+# column on right). Factor out inner automorphisms from automorphism group
+# action.
+# TODO: Elements -> Enumerator
+
 OSS.FlattenRow := function(row, nr_cols, size_grp)
   return Sum([1 .. nr_cols], i -> (size_grp + 1) ^ (i - 1) * (row[i] - 1)) + 1;
 end;
 
 OSS.UnflattenRow := function(value, nr_cols, size_grp)
   local ret, i;
-
   ret   := [];
   value := value - 1;
   for i in [1 .. nr_cols - 1] do
@@ -105,6 +109,7 @@ OSS.PowerGroupActRep := function(nr_rows, nr_cols, G, row_group)
   # row classes is equivalant to removing a factor? (every row class has |G|
   # many elements, which are essentially removed from the |G|^nr_cols many
   # elements of G^nr_cols).
+  # TODO: can quotient one factor of power group by Z(G) the center.
   for g in Generators(H) do
     for col in [1 .. nr_cols] do
       map := [1 .. Maximum(points)];
@@ -112,7 +117,7 @@ OSS.PowerGroupActRep := function(nr_rows, nr_cols, G, row_group)
         point      := OSS.UnflattenRow(i, nr_cols, Size(G));
         point[col] := point[col] ^ g;
         map[i]     := CanonicalImage(row_group,
-                                     OSS.FlattenRow(point, nr_cols, Size(G)));
+                                    OSS.FlattenRow(point, nr_cols, Size(G)));
       od;
       Add(out_gens, ShallowCopy(map));
     od;
@@ -123,6 +128,7 @@ OSS.PowerGroupActRep := function(nr_rows, nr_cols, G, row_group)
   return Group(List(out_gens, PermList));
 end;
 
+# TODO: Remove inner automorphisms from this
 OSS.AutomorphismGroupActRep := function(nr_rows, nr_cols, G, row_group)
   local points, out_gens, A, AA, map, point, g, i;
 
@@ -342,3 +348,107 @@ function(n)
   od;
   return out;
 end);
+
+###############################################################################
+# Count 0-simple semigroups over groups with no outer automorphisms
+###############################################################################
+
+
+
+###############################################################################
+# Count 0-simple semigroups over groups with no outer automorphisms (abandoned)
+# Approach based on paper of Palmer on enumeration under wreath product but
+# which doesn't work due to working with row orbits rather than rows
+###############################################################################
+
+MobiusFunction := function(x)
+  if x = 1 then
+    return 1;
+  elif not IsDuplicateFreeList(FactorsInt(x)) then
+    return 0;
+  fi;
+  return (-1) ^ Length(FactorsInt(x));
+end;
+
+# The multiplication defined in Section 3 equation (1)
+xProd := function(x, y)
+  local func, ext1, ext2;
+
+  func := function(x, y)
+    return Product([1, 3 .. Length(x) - 1], s -> Product([1, 3 .. Length(y) - 1],
+          t -> Indeterminate(Rationals, Lcm(x[s], y[t])) ^
+            (Gcd(x[s], y[t]) * x[s + 1] * y[t + 1])));
+  end;
+
+  ext1 := ExtRepPolynomialRatFun(x);
+  ext2 := ExtRepPolynomialRatFun(y);
+
+  return Sum([1, 3 .. Length(ext1) - 1], i -> Sum([1, 3 .. Length(ext2) - 1],
+  j -> ext1[i + 1] * ext2[j + 1] * func(ext1[i], ext2[j])));
+end;
+
+# The function defined in Section 3 equation (6)
+iv := function(v, r, j)
+  local func;
+
+  func := function(k)
+    local pos;
+    pos := Position(j{[1, 3 .. Length(j) - 1]}, k);
+    if pos = fail then
+      return 0;
+    fi;
+    return j[pos + 1];
+  end;
+
+  # some easy cases
+  if Gcd(r, v) = 1 then
+    return func(v);
+  elif IsPrimeInt(v) and Gcd(r, v) = v then
+    return (func(1) ^ v - func(1)) / v;
+  fi;
+
+  return Sum(DivisorsInt(v), w -> MobiusFunction(v / w) * Sum(DivisorsInt(w /
+             Gcd(w, r)), k -> k * func(k)) ^ Gcd(w, r)) / v;
+end;
+
+# The function defined in Section 3 equation (5)
+Ir := function(x, r)
+  local ext, out, j, a;
+  ext := ExtRepPolynomialRatFun(x);
+
+  out := 0;
+
+  n := Maximum(Union(List(ext{[1, 3 .. Length(ext) - 1]}, t -> t{[1, 3 ..
+       Length(t) - 1]})));
+
+  for a in [1, 3 .. Length(ext) - 1] do
+    j   := ext[a];
+    out := out + ext[a + 1] * Product([1 .. n ^ r], v ->
+           Indeterminate(Rationals, v) ^ iv(v, r, j));
+  od;
+  return out;
+end;
+
+CycleIndexOfWreathProduct := function(G, H)
+  local ZG, ZH, ext, num, Irs, out, lis, tmp, i, j;
+  ZG := CycleIndex(G);  # This is the group which acts
+  ZH := CycleIndex(H);  # This is the group which has multiple factors
+
+  ext := ExtRepPolynomialRatFun(ZG);
+  num := Union(List([1, 3 .. Length(ext) - 1], i -> ext[i]{[1, 3 ..
+         Length(ext[i]) - 1]}));
+
+  Irs := List(num, r -> Ir(ZH, r));
+
+  out := 0;
+  for i in [1, 3 .. Length(ext) - 1] do
+    lis := Concatenation(List([1, 3 .. Length(ext[i]) - 1], j ->
+           ListWithIdenticalEntries(ext[i][j + 1], ext[i][j])));
+    tmp := ext[i + 1] * Irs[lis[1]];
+    for j in lis{[2 .. Length(lis)]} do
+      tmp := xProd(tmp, Irs[j]);
+    od;
+    out := out + tmp;
+  od;
+  return out;
+end;

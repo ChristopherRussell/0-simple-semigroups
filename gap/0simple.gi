@@ -685,32 +685,33 @@ OSS.RZMSMatrixIsomorphismGroup := function(shape, nr_rows, nr_cols,
   # Apply g to each row (left multiplication by inverse):
   rmlt := List(gens, g -> PermList(Concatenation([1],
           1 + List(elms, e -> Position(elms, (g ^ -1) * e)))));
-  grswaps := List(rmlt,
-                  g -> OSS.ApplyPermSingleAssignDimension(dim, 3, g, 1, 1));
+  grswaps := List([1 .. dim[1]], r -> List(rmlt, g ->
+  OSS.ApplyPermSingleAssignDimension(dim, 3, g, 1, r)));
 
   # Apply g to each col (right multiplication):
   lmlt := List(gens, g -> PermList(Concatenation([1],
           1 + List(elms, e -> Position(elms, e * g)))));
-  gcswaps := List(lmlt, g ->
-                  OSS.ApplyPermSingleAssignDimension(dim, 3, g, 2, r));
+  gcswaps := List([1 .. dim[2]], r -> List(lmlt, g ->
+  OSS.ApplyPermSingleAssignDimension(dim, 3, g, 2, r)));
 
   # Automorphisms of G
   S    := AutomorphismGroup(G);
-  auto := List(GeneratorsOfGroup(S), x -> List(Elements(G), a ->
+  auto := Filtered(GeneratorsOfGroup(S), x -> not IsInnerAutomorphism(x));
+  auto := List(auto, x -> List(Elements(G), a ->
           Position(Elements(G), a ^ x)));
   Apply(auto, a -> PermList(Concatenation([1], a + 1)));
   auto := List(auto, x -> OSS.ApplyPermWholeDimension(dim, 3, x));
 
-  # Add transposition perm if searching up to anti-isomorphism in square case
-  if anti_iso and nr_rows = nr_cols then
-    # Check if shape corresponds to a symmetric matrix
-    if ForAll([2 .. nr_rows],
-              i -> ForAll([i + 1 .. nr_cols],
-                          j -> (((i - 1) * nr_cols + j) in shape) =
-                               (((j - 1) * nr_cols + i) in shape))) then
-      Add(auto, OSS.TranspositionPerm(dim));
-    fi;
-  fi;
+#  # Add transposition perm if searching up to anti-isomorphism in square case
+#  if anti_iso and nr_rows = nr_cols then
+#    # Check if shape corresponds to a symmetric matrix
+#    if ForAll([2 .. nr_rows],
+#              i -> ForAll([i + 1 .. nr_cols],
+#                          j -> (((i - 1) * nr_cols + j) in shape) =
+#                               (((j - 1) * nr_cols + i) in shape))) then
+#      Add(auto, OSS.TranspositionPerm(dim));
+#    fi;
+#  fi;
 
   # The RZMS matrix isomorphism group
   return Group(Flat([GeneratorsOfGroup(H), grswaps, gcswaps, auto]));
