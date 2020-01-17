@@ -1,12 +1,17 @@
-DeclareOperation("NrMatricesAllRowsAndColsUnique", [IsInt, IsInt]);
+DeclareOperation("NrMatricesAllRowsAndColsUniqueUpToRowAndColPermutation",
+                 [IsInt, IsInt]);
+DeclareOperation("NrMatricesAllRowsAndColsUnique",
+                 [IsInt, IsInt, IsPerm, IsPerm]);
 DeclareOperation("IteratorOfConnectedComponents",
                  [IsInt, IsInt, IsPerm, IsPerm]);
-DeclareOperation("IteratorOfLabelsGCDs", [IsInt, IsInt, IsList]);
-DeclareOperation("CardinalityOfMatrixSets", [IsInt, IsInt, IsList, IsList]);
-DeclareOperation("Omega", [IsInt, IsInt, IsInt]);
+DeclareOperation("IteratorOfLabelGCDs", [IsInt, IsInt, IsList]);
+DeclareOperation("CardinalityOfMatrixSetsIntersection",
+                 [IsInt, IsInt, IsList, IsList]);
+DeclareOperation("_Omega", [IsInt, IsInt, IsInt]);
 DeclareAttribute("omega", IsInt);
-DeclareOperation("ParityOfGraphTupleClass", [IsInt, IsInt, IsList, IsList]);
+DeclareOperation("ParityOfMatrixSetsCollection",
+                 [IsInt, IsInt, IsList, IsList]);
 DeclareOperation("Psi", [IsList]);
 DeclareOperation("psi", [IsInt, IsList]);
-DeclareOperation("Omega", [IsInt, IsInt, IsList, IsList]);
-DeclareOperation("omega", [IsInt, IsInt]);
+DeclareOperation("Theta", [IsInt, IsInt, IsList, IsList]);
+DeclareOperation("theta", [IsInt, IsInt]);

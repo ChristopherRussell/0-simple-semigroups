@@ -9,3 +9,4 @@ ReadPackage("othersmallsemi", "gap/0simple.gd");
 ReadPackage("othersmallsemi", "gap/simple.gd");
 ReadPackage("othersmallsemi", "gap/count0simple.gd");
 ReadPackage("othersmallsemi", "gap/countsimple.gd");
+ReadPackage("othersmallsemi", "gap/countcfsemi.gd");
