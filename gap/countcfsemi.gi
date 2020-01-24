@@ -29,7 +29,7 @@ end);
 InstallMethod(NrMatricesAllRowsAndColsUnique,
 "for an int, an int, a perm and a perm", [IsInt, IsInt, IsPerm, IsPerm],
 function(m, n, rho, sig)
-  local sum, iter_comps, comps, iter_labels, labels, size, parity;
+  local sum, iter_comps, check, comps, iter_labels, labels, rho_cycles, sig_cycles, size, parity;
   if m < 1 then
     ErrorNoReturn("OtherSmallSemi: NrMatricesAllRowsAndColsUnique: the ",
                   "first arugment should be a positive integer,");
@@ -42,22 +42,43 @@ function(m, n, rho, sig)
     return 0;
   elif Order(rho) <> Order(sig) then
     return 0;
+  elif rho = () then
+    return Sum([0 .. m], i -> Sum([0 .. n],
+                j -> (-1) ^ (m + n - i - j) * Stirling1(m, i) * Stirling1(n, j) * 2 ^ (i * j)));
   fi;
   sum        := 0;
   iter_comps := IteratorOfConnectedComponents(m, n, rho, sig);
+  check      := true;  #  Do something the on the first loop only.
   while not IsDoneIterator(iter_comps) do
     comps       := NextIterator(iter_comps);
     iter_labels := IteratorOfLabelGCDs(m, n, comps);
     while not IsDoneIterator(iter_labels) do
       labels := NextIterator(iter_labels);
-      size   := __OmegaSum(m, n, comps, labels);
-##        if CountByCompsAndLabels(m, n, comps, labels) <> size then
-##          Print(comps, "\n", labels, "\n\n");
-##        fi;
-      parity := ParityOfMatrixSetsCollection(m, n, comps, labels);
-      sum    := sum + size * parity;
+      if check and IsDoneIterator(iter_labels) then
+        rho_cycles := Collected(CycleLengths(rho, [1 .. m]));
+        sig_cycles := Collected(CycleLengths(sig, [1 .. n]));
+        sum        := sum + Product(rho_cycles,
+                      rc -> Product(sig_cycles, sc -> 2 ^
+                      (Gcd(rc[1], sc[1]) * rc[2] * sc[2])));
+      else
+        size   := CardinalityOfMatrixSetsIntersection(m, n, comps, labels);
+          #if CountByCompsAndLabels(m, n, comps, labels) <> size then
+          #  Print(comps, "\n", labels, "\n\n");
+          #fi;
+        parity := ParityOfMatrixSetsCollection(m, n, rho, sig, comps, labels);
+        sum    := sum + size * parity;
+        #Print("rho := ", rho, "; sig := ", sig, ";\ncomps := ", comps, ";\nlabels := ", labels, ";\nOutputs size = ", size, " and parity = ", parity, "\n\n");
+      fi;
     od;
+    check := false;
   od;
+  # rho_cycles := Collected(CycleLengths(rho, [1 .. m]));
+  # sig_cycles := Collected(CycleLengths(sig, [1 .. n]));
+  # return Product(rho_cycles, rc -> Product(sig_cycles, sc -> 2 ^ (Gcd(rc[1],
+  # sc[1]) * rc[2] * sc[2]))) - sum;
+  #if Size(FixedAndDupeFree(m,n,rho,sig)) <> sum then
+  #  Print("\n", [rho, sig], "\n");
+  #fi;
   return sum;
 end);
 
@@ -108,51 +129,81 @@ InstallMethod(IteratorOfLabelGCDs,
 "for an int, an int and a list",
 [IsInt, IsInt, IsList],
 function(m, n, comps)
-  local labels, divs, x;
-  labels := EmptyPlist(m + n);
+  local labelled_comps, divs, x;
+  labelled_comps := EmptyPlist(m + n);
   for x in [1 .. m + n] do
     if IsEmpty(comps[x]) then
-      labels[x] := [[]];
-##      elif x = 1 or x = m + 1 then
-##        labels[x] := [ListWithIdenticalEntries(Length(comps[x]), 1)];
+      labelled_comps[x] := [[]];
     else
       if x > m then
         divs := ShallowCopy(DivisorsInt(x - m));
       else
         divs := ShallowCopy(DivisorsInt(x));
       fi;
-##      Remove(divs);  # Remove i from divs
-      labels[x] := Cartesian(ListWithIdenticalEntries(Length(comps[x]), divs));
+      labelled_comps[x] := Cartesian(List(comps[x], 
+                                     i -> List(divs, j -> [i, j])));
+      labelled_comps[x] := Set(labelled_comps[x], Collected);
     fi;
   od;
-  return IteratorOfCartesianProduct(labels);
+  return IteratorOfCartesianProduct(labelled_comps);
 end);
 
 InstallMethod(CardinalityOfMatrixSetsIntersection,
 "for an int, an int, a list and a list",
 [IsInt, IsInt, IsList, IsList],
 function(m, n, comps, labels)
-  local prod, x, i, y, j;
-  prod := 1;
+  local delta, row, _Lambda, row_comps, col_comps, x, c1, z1, y, c2, i, c, j;
+  delta := [];
   for x in [1 .. m] do
-    for i in [1 .. Length(comps[x])] do
-      for y in [1 .. n] do
-        for j in [1 .. Length(comps[m + y])] do
-          prod := prod *_Omega(Gcd(labels[x][i], labels[m + y][j]),
-                               comps[x][i],
-                               comps[m + y][j]);
+    for c1 in labels[x] do
+      for z1 in [1 .. c1[2]] do
+        row := [];
+        for y in [1 .. n] do
+          for c2 in labels[m + y] do
+            for z1 in [1 .. c2[2]] do
+              Add(row, DivisorsInt(Gcd(c1[1][2], c2[1][2])));
+            od;
+          od;
         od;
+        Add(delta, row);
       od;
     od;
   od;
-  return prod;
+  _Lambda := Cartesian(List(delta, row ->
+  Cartesian(row)));
+  row_comps := [];
+  for i in [1 .. m] do
+    for c in labels[i] do
+      for j in [1 .. c[2]] do
+        Add(row_comps, c[1][1]);
+      od;
+    od;
+  od;
+  col_comps := [];
+  for i in [m + 1 .. m + n] do
+    for c in labels[i] do
+      for j in [1 .. c[2]] do
+        Add(col_comps, c[1][1]);
+      od;
+    od;
+  od;
+  return Sum(_Lambda, lambda -> _Omega(lambda, row_comps, col_comps));
 end);
 
 InstallMethod(_Omega,
-"for an int, an int and an int",
-[IsInt, IsInt, IsInt],
-function(k, x, y)
-  return Sum(DivisorsInt(k), d -> omega(d) * d ^ (x + y - 2));
+"for an int, an int, a list and a list",
+[IsList, IsList, IsList],
+function(lambda, row_comps, col_comps)
+  local prod, x, tlambda;
+  prod := Product(Concatenation(lambda), omega);
+  for x in [1 .. Length(lambda)] do
+    prod := prod * Lcm(lambda[x]) ^ (row_comps[x] - 1);
+  od;
+  tlambda := TransposedMat(lambda);
+  for x in [1 .. Length(tlambda)] do
+    prod := prod * Lcm(tlambda[x]) ^ (col_comps[x] - 1);
+  od;
+  return prod;
 end);
 
 # TODO: THIS SHOULD BE AN ATTRIBUTE BUT DOESN'T WORK AS AN INT ATTRIBUTE
@@ -164,47 +215,60 @@ function(p)
     return 2;
   fi;
   divs := ShallowCopy(DivisorsInt(p));
-  Remove(divs);  # Remove p from divs
+  Remove(divs); # Remove p from divs
   return 2 ^ p - Sum(divs, q -> omega(q));
 end);
 
-#  TODO: Shouldn't this return the negative of what it currently returns?
+###############################################################################
+# Parity of matrix sets
+###############################################################################
 InstallMethod(ParityOfMatrixSetsCollection,
 "for an int, an int, a list and a list",
-[IsInt, IsInt, IsList, IsList],
-function(m, n, comps, labels)
-  return Psi(comps) * Theta(m, n, comps, labels);
+[IsInt, IsInt, IsPerm, IsPerm, IsList, IsList],
+function(m, n, rho, sig, comps, labels)
+  return gamma(m, n, rho, sig, comps, labels) * Psi(comps) * Theta(m, n, comps, labels);
+end);
+
+InstallMethod(gamma,
+"for an int, an int, a list and a list",
+[IsInt, IsInt, IsPerm, IsPerm, IsList, IsList],
+function(m, n, rho, sig, comps, labels)
+  local rho_cycles, sig_cycles, order_centralizer, order_stabilizer;
+  rho_cycles := Collected(CycleLengths(rho, [1 .. m]));
+  sig_cycles := Collected(CycleLengths(sig, [1 .. n]));
+  order_centralizer := Product(Concatenation(rho_cycles, sig_cycles),
+                               c -> Factorial(c[2]));
+  order_stabilizer := Product([1 .. m + n], i -> Product(comps[i], Factorial));
+  order_stabilizer := order_stabilizer * Product([1 .. m + n], i ->
+                      Product(labels[i], c -> Factorial(c[2])));
+  return order_centralizer / order_stabilizer;
 end);
 
 InstallMethod(Psi,
 "for a list", [IsList],
 function(comps)
-  return Product([1 .. Length(comps)], x -> psi(Sum(comps[x]), List([1 ..
-  Sum(comps[x])], i -> Number(comps[x], j -> j = i))));
+  return Product([1 .. Length(comps)],
+                 i -> Product(comps[i], comp -> psi(comp)));
 end);
 
 InstallMethod(psi,
-"for an int and a list", [IsInt, IsList],
-function(degree, comp)
-  return Factorial(degree) *
-         Product([1 .. degree],
-                 j -> ((-1) ^ (j - 1) * Factorial(j - 1)) ^ comp[j]) /
-         Product([1 .. degree], i -> Factorial(comp[i]) * i ^ comp[i]) /
-         Product([1 .. degree], i -> Factorial(i - 1) ^ comp[i]);
+"for an int", [IsInt],
+function(degree)
+  return (-1) ^ (degree - 1) * Factorial(degree - 1);
 end);
 
 InstallMethod(Theta,
 "for an int, an int, a list and a list",
 [IsInt, IsInt, IsList, IsList],
 function(m, n, comps, labels)
-  local prod, x, i;
+  local prod, x, c;
   prod := 1;
   for x in [1 .. m + n] do
-    for i in [1 .. Length(comps[x])] do
+    for c in labels[x] do
       if x > m then
-        prod := prod * theta(x - m, labels[x][i]);
+        prod := prod * theta(x - m, c[1][2]) ^ c[2];
       else
-        prod := prod * theta(x, labels[x][i]);
+        prod := prod * theta(x, c[1][2]) ^ c[2];
       fi;
     od;
   od;
@@ -221,10 +285,11 @@ function(x, k)
   fi;
   return 0;
 end);
-
+###############################################################################
+###############################################################################
 
 MatsFixedBy := function(m, n, p, q)
-  local a, b, G, o, f, mat, out, i, x;
+  local a, b, G, o, f, mat, out, cart, i, x;
 
   a := OSS.ApplyPermWholeDimension([m, n, 1], 1, p);
   b := OSS.ApplyPermWholeDimension([m, n, 1], 2, q);
@@ -259,7 +324,7 @@ DuplicateFreeMats := function(mats)
 end;
 
 FixedAndDupeFree := function(m, n, p, q)
-  local a, b, G, o, f, mat, out, i, x, M;
+  local a, b, G, o, f, mat, out, cart, M, i, x;
 
   a := OSS.ApplyPermWholeDimension([m, n, 1], 1, p);
   b := OSS.ApplyPermWholeDimension([m, n, 1], 2, q);

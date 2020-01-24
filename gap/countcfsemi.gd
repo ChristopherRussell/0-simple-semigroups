@@ -7,11 +7,13 @@ DeclareOperation("IteratorOfConnectedComponents",
 DeclareOperation("IteratorOfLabelGCDs", [IsInt, IsInt, IsList]);
 DeclareOperation("CardinalityOfMatrixSetsIntersection",
                  [IsInt, IsInt, IsList, IsList]);
-DeclareOperation("_Omega", [IsInt, IsInt, IsInt]);
+DeclareOperation("_Omega", [IsList, IsList, IsList]);
 DeclareAttribute("omega", IsInt);
 DeclareOperation("ParityOfMatrixSetsCollection",
-                 [IsInt, IsInt, IsList, IsList]);
+                 [IsInt, IsInt, IsPerm, IsPerm, IsList, IsList]);
+DeclareOperation("gamma",
+                 [IsInt, IsInt, IsPerm, IsPerm, IsList, IsList]);
 DeclareOperation("Psi", [IsList]);
-DeclareOperation("psi", [IsInt, IsList]);
+DeclareAttribute("psi", IsInt);
 DeclareOperation("Theta", [IsInt, IsInt, IsList, IsList]);
 DeclareOperation("theta", [IsInt, IsInt]);
