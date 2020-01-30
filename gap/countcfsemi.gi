@@ -29,7 +29,9 @@ end);
 InstallMethod(NrMatricesAllRowsAndColsUnique,
 "for an int, an int, a perm and a perm", [IsInt, IsInt, IsPerm, IsPerm],
 function(m, n, rho, sig)
-  local sum, iter_comps, check, comps, iter_labels, labels, rho_cycles, sig_cycles, size, parity;
+  local out_sum, iter_comps, check, rho_cycles, rho_nr_1cycles, sig_cycles,
+  sig_nr_1cycles, sum, comps, iter_labels, labels, size, parity, nr_row_comps,
+  nr_col_comps;
   if m < 1 then
     ErrorNoReturn("OtherSmallSemi: NrMatricesAllRowsAndColsUnique: the ",
                   "first arugment should be a positive integer,");
@@ -43,43 +45,61 @@ function(m, n, rho, sig)
   elif Order(rho) <> Order(sig) then
     return 0;
   elif rho = () then
-    return Sum([0 .. m], i -> Sum([0 .. n],
-                j -> (-1) ^ (m + n - i - j) * Stirling1(m, i) * Stirling1(n, j) * 2 ^ (i * j)));
+    return Sum([0 .. m], i -> Sum([0 .. n], j -> (-1) ^ (m + n - i - j) *
+    Stirling1(m, i) * Stirling1(n, j) * 2 ^ (i * j)));
   fi;
-  sum        := 0;
+  out_sum        := 0;
   iter_comps := IteratorOfConnectedComponents(m, n, rho, sig);
   check      := true;  #  Do something the on the first loop only.
+  rho_cycles := SortedList(Collected(CycleLengths(rho, [1 .. m])));
+  if rho_cycles[1][1] = 1 then  #  Remove information about 1-cycles
+    rho_nr_1cycles := rho_cycles[1][2];
+    Remove(rho_cycles, 1);
+  else
+    rho_nr_1cycles := 0;
+  fi;
+
+  sig_cycles := SortedList(Collected(CycleLengths(sig, [1 .. n])));
+  if sig_cycles[1][1] = 1 then  #  Remove information about 1-cycles
+    sig_nr_1cycles      := sig_cycles[1][2];
+    Remove(sig_cycles, 1);
+  else
+    sig_nr_1cycles := 0;
+  fi;
+  
   while not IsDoneIterator(iter_comps) do
+    sum := 0;
     comps       := NextIterator(iter_comps);
     iter_labels := IteratorOfLabelGCDs(m, n, comps);
     while not IsDoneIterator(iter_labels) do
       labels := NextIterator(iter_labels);
       if check and IsDoneIterator(iter_labels) then
-        rho_cycles := Collected(CycleLengths(rho, [1 .. m]));
-        sig_cycles := Collected(CycleLengths(sig, [1 .. n]));
-        sum        := sum + Product(rho_cycles,
-                      rc -> Product(sig_cycles, sc -> 2 ^
-                      (Gcd(rc[1], sc[1]) * rc[2] * sc[2])));
+        sum := sum + Product(rho_cycles, rc -> Product(sig_cycles, sc -> 2 ^
+               (Gcd(rc[1], sc[1]) * rc[2] * sc[2])));
       else
         size   := CardinalityOfMatrixSetsIntersection(m, n, comps, labels);
           #if CountByCompsAndLabels(m, n, comps, labels) <> size then
           #  Print(comps, "\n", labels, "\n\n");
           #fi;
-        parity := ParityOfMatrixSetsCollection(m, n, rho, sig, comps, labels);
+        parity := ParityOfMatrixSetsCollection(m, n, rho_cycles, sig_cycles,
+                  comps, labels);
         sum    := sum + size * parity;
         #Print("rho := ", rho, "; sig := ", sig, ";\ncomps := ", comps, ";\nlabels := ", labels, ";\nOutputs size = ", size, " and parity = ", parity, "\n\n");
       fi;
     od;
     check := false;
+    nr_row_comps := Length(Concatenation(comps{[1 .. m]}));
+    nr_col_comps := Length(Concatenation(comps{[m + 1 .. m + n]}));
+    sum := sum * (Sum([0 .. rho_nr_1cycles], i -> Sum([0 .. sig_nr_1cycles], j ->
+         (-1) ^ (rho_nr_1cycles + sig_nr_1cycles - i - j) *
+         Stirling1(rho_nr_1cycles, i) * Stirling1(sig_nr_1cycles, j)
+         * 2 ^ (i * nr_col_comps + j * nr_row_comps + i * j))));
+    out_sum := out_sum + sum;
   od;
-  # rho_cycles := Collected(CycleLengths(rho, [1 .. m]));
-  # sig_cycles := Collected(CycleLengths(sig, [1 .. n]));
-  # return Product(rho_cycles, rc -> Product(sig_cycles, sc -> 2 ^ (Gcd(rc[1],
-  # sc[1]) * rc[2] * sc[2]))) - sum;
-  #if Size(FixedAndDupeFree(m,n,rho,sig)) <> sum then
-  #  Print("\n", [rho, sig], "\n");
-  #fi;
-  return sum;
+  #  if Size(FixedAndDupeFree(m,n,rho,sig)) <> sum then
+  #    Print("\n", [rho, sig], "\n");
+  #  fi;
+  return out_sum;
 end);
 
 InstallMethod(IteratorOfConnectedComponents,
@@ -89,9 +109,10 @@ function(m, n, rho, sig)
   local IteratorOfCC, R;
   IteratorOfCC := function(m, rho)
     local lens, comps, i;
-    lens  := CycleLengths(rho, [1 .. m]);
-    comps := EmptyPlist(m);
-    for i in [1 .. m] do
+    lens     := CycleLengths(rho, [1 .. m]);
+    comps    := EmptyPlist(m);
+    comps[1] := [[]];
+    for i in [2 .. m] do
       comps[i] := Partitions(Number(lens, l -> l = i));
     od;
     return IteratorOfCartesianProduct(comps);
@@ -224,18 +245,17 @@ end);
 ###############################################################################
 InstallMethod(ParityOfMatrixSetsCollection,
 "for an int, an int, a list and a list",
-[IsInt, IsInt, IsPerm, IsPerm, IsList, IsList],
-function(m, n, rho, sig, comps, labels)
-  return gamma(m, n, rho, sig, comps, labels) * Psi(comps) * Theta(m, n, comps, labels);
+[IsInt, IsInt, IsList, IsList, IsList, IsList],
+function(m, n, rho_cycles, sig_cycles, comps, labels)
+  return gamma(m, n, rho_cycles, sig_cycles, comps, labels) * Psi(comps) *
+  Theta(m, n, comps, labels);
 end);
 
 InstallMethod(gamma,
 "for an int, an int, a list and a list",
-[IsInt, IsInt, IsPerm, IsPerm, IsList, IsList],
-function(m, n, rho, sig, comps, labels)
-  local rho_cycles, sig_cycles, order_centralizer, order_stabilizer;
-  rho_cycles := Collected(CycleLengths(rho, [1 .. m]));
-  sig_cycles := Collected(CycleLengths(sig, [1 .. n]));
+[IsInt, IsInt, IsList, IsList, IsList, IsList],
+function(m, n, rho_cycles, sig_cycles, comps, labels)
+  local order_centralizer, order_stabilizer;
   order_centralizer := Product(Concatenation(rho_cycles, sig_cycles),
                                c -> Factorial(c[2]));
   order_stabilizer := Product([1 .. m + n], i -> Product(comps[i], Factorial));
@@ -497,3 +517,5 @@ __OmegaSum := function(m, n, comps, labels)
   od;
   return sum;
 end;
+
+

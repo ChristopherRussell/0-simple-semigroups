@@ -10,10 +10,11 @@ DeclareOperation("CardinalityOfMatrixSetsIntersection",
 DeclareOperation("_Omega", [IsList, IsList, IsList]);
 DeclareAttribute("omega", IsInt);
 DeclareOperation("ParityOfMatrixSetsCollection",
-                 [IsInt, IsInt, IsPerm, IsPerm, IsList, IsList]);
+                 [IsInt, IsInt, IsList, IsList, IsList, IsList]);
 DeclareOperation("gamma",
-                 [IsInt, IsInt, IsPerm, IsPerm, IsList, IsList]);
+                 [IsInt, IsInt, IsList, IsList, IsList, IsList]);
 DeclareOperation("Psi", [IsList]);
 DeclareAttribute("psi", IsInt);
 DeclareOperation("Theta", [IsInt, IsInt, IsList, IsList]);
 DeclareOperation("theta", [IsInt, IsInt]);
+
