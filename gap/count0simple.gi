@@ -128,7 +128,8 @@ OSS.PowerGroupActRep := function(nr_rows, nr_cols, G, row_group)
   return Group(List(out_gens, PermList));
 end;
 
-# TODO: Remove inner automorphisms from this
+# TODO: Remove inner automorphisms from this, when possible, for efficiency.
+#       i.e. 'quotient' the part of the kernel of the action.
 OSS.AutomorphismGroupActRep := function(nr_rows, nr_cols, G, row_group)
   local points, out_gens, A, AA, map, point, g, i;
 
@@ -351,104 +352,232 @@ end);
 
 ###############################################################################
 # Count 0-simple semigroups over groups with no outer automorphisms
+# Started coding this part on 15/04/20
 ###############################################################################
 
-
-
-###############################################################################
-# Count 0-simple semigroups over groups with no outer automorphisms (abandoned)
-# Approach based on paper of Palmer on enumeration under wreath product but
-# which doesn't work due to working with row orbits rather than rows
-###############################################################################
-
-MobiusFunction := function(x)
-  if x = 1 then
+OSS.NrZeroSimpleSemigroupsNoOuterAut := function(m, n, G)
+  if m = 1 or n = 1 then
     return 1;
-  elif not IsDuplicateFreeList(FactorsInt(x)) then
-    return 0;
+  elif m > n then
+    return OSS.NrZeroSimpleSemigroupsNoOuterAut(n, m, G);
   fi;
-  return (-1) ^ Length(FactorsInt(x));
+
+  return OSS.NrMatrixRowSetsNoOuterAut(m, n, G) -
+    OSS.NrMatrixRowSetsNoOuterAut(m - 1, n, G) -
+    OSS.NrMatrixRowSetsNoOuterAut(m, n - 1, G) +
+    OSS.NrMatrixRowSetsNoOuterAut(m - 1, n - 1, G);
 end;
 
-# The multiplication defined in Section 3 equation (1)
-xProd := function(x, y)
-  local func, ext1, ext2;
-
-  func := function(x, y)
-    return Product([1, 3 .. Length(x) - 1], s -> Product([1, 3 .. Length(y) - 1],
-          t -> Indeterminate(Rationals, Lcm(x[s], y[t])) ^
-            (Gcd(x[s], y[t]) * x[s + 1] * y[t + 1])));
-  end;
-
-  ext1 := ExtRepPolynomialRatFun(x);
-  ext2 := ExtRepPolynomialRatFun(y);
-
-  return Sum([1, 3 .. Length(ext1) - 1], i -> Sum([1, 3 .. Length(ext2) - 1],
-  j -> ext1[i + 1] * ext2[j + 1] * func(ext1[i], ext2[j])));
+OSS.NrMatrixRowSetsNoOuterAut := function(m, n, G)
+  local out;
+  if m < n then
+    return OSS.NrMatrixRowSetsNoOuterAut(n, m, G);
+  elif m = 1 or n = 1 then
+    return Maximum(m, n) + 1;
+  fi;
+  out := OSS.CountMatrixRowSetsNoOuterAut(m, n, G);
+  return out;
 end;
 
-# The function defined in Section 3 equation (6)
-iv := function(v, r, j)
-  local func;
+OSS.CountMatrixRowSetsNoOuterAut := function(nr_rows, nr_cols, G)
+  local indices, appearing, val, coeff, i;
+  indices   := OSS.CycleIndexNoOuterAut(G, nr_cols);
+  appearing := ExtRepPolynomialRatFun(indices);
+  appearing := Union(appearing{[1, 3 .. Length(appearing) - 1]});
 
-  func := function(k)
-    local pos;
-    pos := Position(j{[1, 3 .. Length(j) - 1]}, k);
-    if pos = fail then
-      return 0;
+  val := Value(indices,
+               List(appearing, i -> Indeterminate(Rationals, i)),
+               List(appearing, i -> Sum([0 .. nr_rows], j ->
+                                      Indeterminate(Rationals, 1) ^ (i * j))));
+
+  coeff := CoefficientsOfLaurentPolynomial(val)[1]{[2 .. nr_rows + 1]};
+  for i in [1 .. nr_rows - 1] do
+    if not Tester(NrMatrixRowSets)([i, nr_cols, G]) then
+      Setter(NrMatrixRowSets)([i, nr_cols, G], coeff[i]);
     fi;
-    return j[pos + 1];
-  end;
-
-  # some easy cases
-  if Gcd(r, v) = 1 then
-    return func(v);
-  elif IsPrimeInt(v) and Gcd(r, v) = v then
-    return (func(1) ^ v - func(1)) / v;
-  fi;
-
-  return Sum(DivisorsInt(v), w -> MobiusFunction(v / w) * Sum(DivisorsInt(w /
-             Gcd(w, r)), k -> k * func(k)) ^ Gcd(w, r)) / v;
-end;
-
-# The function defined in Section 3 equation (5)
-Ir := function(x, r)
-  local ext, out, j, a;
-  ext := ExtRepPolynomialRatFun(x);
-
-  out := 0;
-
-  n := Maximum(Union(List(ext{[1, 3 .. Length(ext) - 1]}, t -> t{[1, 3 ..
-       Length(t) - 1]})));
-
-  for a in [1, 3 .. Length(ext) - 1] do
-    j   := ext[a];
-    out := out + ext[a + 1] * Product([1 .. n ^ r], v ->
-           Indeterminate(Rationals, v) ^ iv(v, r, j));
   od;
-  return out;
+  return coeff[nr_rows];
 end;
 
-CycleIndexOfWreathProduct := function(G, H)
-  local ZG, ZH, ext, num, Irs, out, lis, tmp, i, j;
-  ZG := CycleIndex(G);  # This is the group which acts
-  ZH := CycleIndex(H);  # This is the group which has multiple factors
+OSS.CycleIndexNoOuterAut := function(G, n)
+  local G_classes, G_reps, G_cc_sizes, CG_sizes, S, S_classes, S_reps, max_ord,
+  powers, roots, reps, sizes, fixes, x, lens, common_factor, iter, g, perm, ci,
+  nr_i_cycles, xx, gg, ci_rep, exp, l, d, xxx, pos, divs, i, j, k, list;
 
-  ext := ExtRepPolynomialRatFun(ZG);
-  num := Union(List([1, 3 .. Length(ext) - 1], i -> ext[i]{[1, 3 ..
-         Length(ext[i]) - 1]}));
+  G_classes  := ConjugacyClasses(G);
+  G_reps     := List(G_classes, Representative);
+  G_cc_sizes := List(G_classes, Size);
 
-  Irs := List(num, r -> Ir(ZH, r));
+  # Sizes of the centralizers of elements of the resepctive conjugacy classes,
+  # which are equal to the size of G divided by the size of the conj class.
+  CG_sizes  := List(G_cc_sizes, i -> Size(G) / i);
 
-  out := 0;
-  for i in [1, 3 .. Length(ext) - 1] do
-    lis := Concatenation(List([1, 3 .. Length(ext[i]) - 1], j ->
-           ListWithIdenticalEntries(ext[i][j + 1], ext[i][j])));
-    tmp := ext[i + 1] * Irs[lis[1]];
-    for j in lis{[2 .. Length(lis)]} do
-      tmp := xProd(tmp, Irs[j]);
+  S         := SymmetricGroup(n);
+  S_classes := ConjugacyClasses(S);
+  S_reps    := List(S_classes, Representative);
+
+  # max order of element of S_n
+  max_ord   := Maximum(List(S_reps, Order));
+
+  # powers[i][j] is such that G_reps[i]^j is an element of the conjugacy class
+  # G_classes[powers[i][j]].
+  powers    := NthPowers(G, G_reps, G_classes);
+
+  # roots[i][j] is a list L of ints such that k is in L if G_reps[k]^j is an
+  # element of the conjugacy class G_classes[i].
+  roots     := NthRoots(powers, max_ord);
+
+  # For G wr S_n, we will find the conjugacy class reps, the class sizes, and
+  # the number of elements fixed by an element in each class. With this
+  # informations we can later determine the cycle indices of these elements and
+  # finally apply polya enumeration to count orbits.
+  reps  := [];
+  sizes := [];
+  fixes := [];
+  for i in [1 .. Size(S_classes)] do
+    x    := S_reps[i];
+    lens := Collected(CycleLengths(x, [1 .. n]));
+
+    # When determining the size of the CC class of (x, g) the following
+    # is a common factor so we only want to calculate it once, now.
+    common_factor := Size(ConjugacyClass(SymmetricGroup(n), x))
+                     * Product(lens, l -> Size(G) ^ ((l[1] - 1) * l[2]));
+
+    iter := IteratorOfCartesianProduct(List(lens, j -> UnorderedTuples([1 ..
+            Size(G_cc_sizes)], j[2])));
+    while not IsDoneIterator(iter) do
+      g := NextIterator(iter);
+      Add(reps, [x, g]);
+      Add(sizes, common_factor
+                 * Product(g, NrPermutationsList)
+                 * Product(g, j -> Product(j, k -> G_cc_sizes[k])));
+      Add(fixes, FixSizeOfCCRep(G, x, g, n, roots, G_cc_sizes, CG_sizes, lens));
     od;
-    out := out + tmp;
+  od;
+  perm  := Sortex(reps);
+  sizes := Permuted(sizes, perm);  # Sorts sizes in paralell with reps
+  fixes := Permuted(fixes, perm);  # Sorts fixes in paralell with reps
+
+  ci := 0;
+  for i in [1 .. Length(reps)] do
+    nr_i_cycles := [fixes[i]];
+    x           := reps[i][1];
+    lens        := Collected(CycleLengths(x, [2 .. n]));
+    g           := reps[i][2];
+    xx          := x;
+    gg          := reps[i][2];
+    ci_rep      := Indeterminate(Rationals, 1) ^ fixes[i];
+    exp         := 2;
+    while xx <> () or ForAny(gg, j -> ForAny(j, k -> k <> 1)) do
+      # find xx, gg such that (xx, gg) is in the conjugacy class of the
+      # the expo'th power of (x, g)
+      xx     := xx * x;
+      gg     := [];
+      for j in [1 .. Length(g)] do
+        l := lens[j][1];
+        d := Gcd(l, exp);
+        if not IsBound(gg[l / d]) then
+          gg[l / d] := [];
+        fi;
+        for k in [1 .. Length(g[j])] do
+          Append(gg[l / d],
+          ListWithIdenticalEntries(d, nthpower(powers[g[j][k]], exp / d)));
+        od;
+      od;
+      gg := Compacted(gg);
+      for list in gg do
+        Sort(list);
+      od;
+      # conjugate to change to form of gg so that (xx, gg) is of equal to one of
+      # our conjugacy class reps, since we only know reps and don't have another
+      # way of checking membership of a conjugacy class of G wr S_n.
+      xxx := S_reps[Position(S_classes, ConjugacyClass(S, xx))];
+      pos := Position(reps, [xxx, gg]);
+      # Fix this line, use lemma from thesis... nr_i_cycles = fix(x^i) - \sum_{d
+      # dividing i} nr_d_cycles * d
+      divs := DivisorsInt(exp);
+      divs := divs{[1 .. Length(divs) - 1]};  # Remove i from divs
+      nr_i_cycles[exp]
+             := (fixes[pos] - Sum(divs, d -> d * nr_i_cycles[d])) / exp;
+      ci_rep := ci_rep * Indeterminate(Rationals, exp) ^ (nr_i_cycles[exp]);
+      exp    := exp + 1;
+    od;
+    ci := ci + sizes[i] * ci_rep;
+  od;
+  return ci / (Size(G) ^ n * Factorial(n));
+end;
+
+# g is a list of ints so that g[i] gives the index of the cc class which the
+# element (x, g) has in the i'th spot of the g factor.
+FixSizeOfCCRep := function(G, x, g, n, roots, G_cc_sizes, centralizer_sizes,
+                           cycle_lens)
+  local sum, prod, i, j, k;
+  sum    := 0;
+  for i in [1 .. Length(roots)] do  # length of roots is nr cc classes of G
+    prod := 1;
+    for j in [1 .. Length(cycle_lens)] do  # for each different length of cycle
+      for k in [1 .. cycle_lens[j][2]] do  # for each cycle of that length
+        # if an element of the i'th cc class of G has any j'th roots
+        if IsBound(roots[g[j][k]][cycle_lens[j][1]]) then
+          if i in roots[g[j][k]][cycle_lens[j][1]] then
+            prod := prod * (centralizer_sizes[g[j][k]] + 1);
+          fi;
+        fi;
+      od;
+    od;
+    prod := prod * G_cc_sizes[i];  # multiply by size of i'th cc class
+    sum  := sum + prod;
+  od;
+  return sum / Size(G);
+end;
+
+# Return a list of lists. If g_1, g_2, ... are the CC reps of G then
+# the i'th list is the sequence i, i_1, i_2, ... such that i_j is in the
+# conjugacy class of g_{i_j}. cc_reps and cc_classes should be such that the
+# i'th entry of cc_reps is from the i'th entry of cc_classes.
+NthPowers := function(G, cc_reps, cc_classes)
+  local out, g, pos, divs, i, j;
+  out := List([1 .. Length(cc_reps)], i -> [i]);
+  for i in [1 .. Length(cc_reps)] do
+    if out[i] = [i] then
+      g := cc_reps[i];
+      while g <> () do
+        g   := g * cc_reps[i];
+        pos := Position(cc_classes, ConjugacyClass(G, g));
+        Add(out[i], pos);
+      od;
+
+      divs := DivisorsInt(Length(out[i]));
+      for j in divs{[2 .. Length(divs) - 1]} do
+        if out[j] = [j] then
+          out[j] := List([1 .. Length(out[i]) / j], k -> out[i][j * k]);
+        fi;
+      od;
+    fi;
   od;
   return out;
 end;
+
+nthpower := function(powers, n)
+  return powers[(n - 1) mod Length(powers) + 1];
+end;
+
+NthRoots := function(powers, max)
+  local roots, i, j;
+  roots := List([1 .. Length(powers)], i -> []);
+  for i in [1 .. Length(powers)] do
+    for j in [1 .. max] do
+      if IsBound(roots[nthpower(powers[i], j)][j]) then
+        AddSet(roots[nthpower(powers[i], j)][j], i);
+      else
+        roots[nthpower(powers[i], j)][j] := [i];
+      fi;
+    od;
+  od;
+  return roots;
+end;
+
+# NthPowers for each CC of G and each power up to the degree of S_n we want to
+# know which conjugacy class the n'th power goes to. We also need to know the
+# size of the centralizer of each CC class. We should work the out only once per
+# CC.

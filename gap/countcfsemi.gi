@@ -81,6 +81,9 @@ function(m, n, rho, sig)
           #if CountByCompsAndLabels(m, n, comps, labels) <> size then
           #  Print(comps, "\n", labels, "\n\n");
           #fi;
+        #if size <> test(m, n, comps, labels) then
+        #  Print("ERROR: ", [rho, sig, comps, labels], "\n\n");
+        #fi;
         parity := ParityOfMatrixSetsCollection(m, n, rho_cycles, sig_cycles,
                   comps, labels);
         sum    := sum + size * parity;
@@ -211,6 +214,51 @@ function(m, n, comps, labels)
   return Sum(_Lambda, lambda -> _Omega(lambda, row_comps, col_comps));
 end);
 
+# InstallMethod(CardinalityOfMatrixSetsIntersectionDFS,
+# "for an int, an int, a list and a list",
+# [IsInt, IsInt, IsList, IsList],
+# function(m, n, comps, labels)
+#   local _labels, mu, nu, DFS;
+#   _labels := Concatenation(labels);
+#   _labels := List(_labels, i -> ListWithIdenticalEntries(i[2],i[1]));
+#   _labels := Concatenation(_labels);
+#   mu := Length(Concatenation(comps{[1 .. m]}));
+#   nu := Length(Concatenation(comps{[m + 1 .. m + n]}));
+# 
+#   DFS := function(lambda, out, prod, row, col)
+#     local new_prod, new_col, new_row, new_lambda, d;
+#     if row = mu and col = nu then
+#       out := out + prod;
+#     else
+#       if col = nu then
+#         new_col := 1;
+#         new_row := row + 1;
+#       else
+#         new_col := col + 1;
+#         new_row := row;
+#       fi;
+# 
+#       for d in DivisorsInt(Gcd(_labels[new_row][2], _labels[mu + new_col][2])) do
+#         new_lambda := ShallowCopy(lambda);
+#         new_lambda[new_row][new_col] := d;
+# 
+#         new_prod := prod * omega(d);
+#         if new_col = nu then
+#           new_prod := new_prod * Lcm(new_lambda[new_row]) ^
+#           (_labels[new_row][1] - 1);
+#         fi;
+#         if new_row = mu then
+#           new_prod := new_prod * Lcm(List([1 .. mu], i ->
+#           new_lambda[i][new_col])) ^ (_labels[mu + new_col][1] - 1);
+#         fi;
+#         out := DFS(new_lambda, out, new_prod, new_row, new_col);
+#       od;
+#     fi;
+#     return out;
+#   end;
+#   return DFS(ListWithIdenticalEntries(mu, []), 0, 1, 1, 0);
+# end);
+
 InstallMethod(_Omega,
 "for an int, an int, a list and a list",
 [IsList, IsList, IsList],
@@ -227,17 +275,36 @@ function(lambda, row_comps, col_comps)
   return prod;
 end);
 
+# # TODO: THIS SHOULD BE AN ATTRIBUTE BUT DOESN'T WORK AS AN INT ATTRIBUTE
+# InstallMethod(omega,
+# "for an int", [IsInt],
+# function(p)
+#   local divs;
+#   if p = 1 then
+#     return 2;
+#   fi;
+#   divs := ShallowCopy(DivisorsInt(p));
+#   Remove(divs); # Remove p from divs
+#   return 2 ^ p - Sum(divs, q -> omega(q));
+# end);
+
+__omega := [2];  # Avoid redoing work
+
 # TODO: THIS SHOULD BE AN ATTRIBUTE BUT DOESN'T WORK AS AN INT ATTRIBUTE
 InstallMethod(omega,
 "for an int", [IsInt],
 function(p)
   local divs;
-  if p = 1 then
-    return 2;
+  if not IsBound(__omega[p]) then
+    if p = 1 then
+      __omega[p] := 2;
+    else
+      divs := ShallowCopy(DivisorsInt(p));
+      Remove(divs);  # Remove p from divs
+      __omega[p] := 2 ^ p - Sum(divs, q -> omega(q));
+    fi;
   fi;
-  divs := ShallowCopy(DivisorsInt(p));
-  Remove(divs); # Remove p from divs
-  return 2 ^ p - Sum(divs, q -> omega(q));
+  return __omega[p];
 end);
 
 ###############################################################################
@@ -271,10 +338,15 @@ function(comps)
                  i -> Product(comps[i], comp -> psi(comp)));
 end);
 
+__psi := [];  # Avoid redoing work
+
 InstallMethod(psi,
 "for an int", [IsInt],
 function(degree)
-  return (-1) ^ (degree - 1) * Factorial(degree - 1);
+  if not IsBound(__psi[degree]) then
+    __psi[degree] := (-1) ^ (degree - 1) * Factorial(degree - 1);
+  fi;
+  return __psi[degree];
 end);
 
 InstallMethod(Theta,
@@ -295,15 +367,23 @@ function(m, n, comps, labels)
   return prod;
 end);
 
+__theta := [];  # Avoid redoing work
+
 InstallMethod(theta,
 "for a int and a int", [IsInt, IsInt],
 function(x, k)
   local p;
-  p := PrimePowersInt(x / k);
-  if ForAll([2, 4 .. Length(p)], i -> p[i] = 1) then
-    return (-1) ^ (Length(p) / 2);
+  if not IsBound(__theta[x]) then
+    __theta[x] := [];
   fi;
-  return 0;
+  if not IsBound(__theta[x][k]) then
+    p := PrimePowersInt(x / k);
+    if ForAll([2, 4 .. Length(p)], i -> p[i] = 1) then
+      __theta[x][k] := (-1) ^ (Length(p) / 2);
+    fi;
+    __theta[x][k] := 0;
+  fi;
+  return __theta[x][k];
 end);
 ###############################################################################
 ###############################################################################
@@ -518,4 +598,12 @@ __OmegaSum := function(m, n, comps, labels)
   return sum;
 end;
 
-
+DupeFreeUpToPerm := function(mats)
+  local out, m, n, G, act;
+  out := DuplicateFreeMats(mats);
+  m := Length(out[1][1]);
+  n := Length(out[1]);
+  G := SymmetricGroup(m);
+  out := Set(out, x -> MinimalImage(G, x, act));
+  return Length(out);
+end;
